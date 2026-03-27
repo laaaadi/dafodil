@@ -8,7 +8,7 @@ WorkingDirectory=/home/dafodil/dafodil
 Environment="SDL_VIDEODRIVER=kmsdrm"
 Environment="SDL_AUDIODRIVER=alsa"
 Environment="DISPLAY="
-ExecStart=/home/dafodil/venv/bin/python3 /home/dafodil/dafodil/main.py
+ExecStart=/bin/bash /home/dafodil/dafodil/run.sh
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
