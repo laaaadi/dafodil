@@ -118,29 +118,51 @@ class Renderer:
 
     def _init_pygame(self):
         """Initialize Pygame with framebuffer."""
-        # Try kmsdrm first, then fbcon, then default
-        for driver in ("kmsdrm", "fbcon", ""):
-            if driver:
-                os.environ["SDL_VIDEODRIVER"] = driver
-            try:
-                import pygame
-                import pygame.freetype
-                pygame.init()
-                self.pygame = pygame
-                break
-            except Exception:
-                if not driver:
-                    raise
-                continue
+        import pygame
+        import pygame.freetype
 
-        pygame = self.pygame
+        # On headless RPi, we must pick a working SDL video driver.
+        # kmsdrm needs /dev/dri access (user must be in 'video' group).
+        # fbcon needs /dev/fb0.
+        # dummy is a last resort (invisible output — useful for debug).
+        drivers = ["kmsdrm", "fbcon", "directfb", "dummy"]
+
+        # Use the override if the environment already has one
+        env_driver = os.environ.get("SDL_VIDEODRIVER", "")
+        if env_driver:
+            drivers = [env_driver] + [d for d in drivers if d != env_driver]
+
+        last_err = None
+        for driver in drivers:
+            os.environ["SDL_VIDEODRIVER"] = driver
+            try:
+                pygame.display.quit()   # reset any prior failed init
+                pygame.display.init()
+                print(f"[Renderer] SDL video driver: {driver}")
+                break
+            except pygame.error as e:
+                last_err = e
+                continue
+        else:
+            raise RuntimeError(
+                f"No working SDL video driver found (tried {drivers}). "
+                f"Last error: {last_err}\n"
+                f"Make sure the user is in the 'video' group: sudo usermod -aG video dafodil"
+            )
+
+        pygame.init()
+        self.pygame = pygame
+
         # Fullscreen
         try:
             self.screen = pygame.display.set_mode(
                 (SCREEN_W, SCREEN_H), pygame.FULLSCREEN | pygame.NOFRAME
             )
         except Exception:
-            self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.NOFRAME)
+            try:
+                self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.NOFRAME)
+            except Exception:
+                self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 
         pygame.display.set_caption("Dafodil")
         pygame.mouse.set_visible(False)

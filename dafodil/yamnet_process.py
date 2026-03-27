@@ -58,8 +58,14 @@ def yamnet_worker(
     with open(classes_path, "r") as f:
         class_names = [line.strip() for line in f.readlines()]
 
-    # Load TFLite model
-    interpreter = tflite.Interpreter(model_path=model_path)
+    # Load TFLite model into memory (avoids mmap errors on some ARM systems)
+    try:
+        interpreter = tflite.Interpreter(model_path=model_path)
+    except (ValueError, OSError):
+        print("[YAMNet] mmap failed, loading model into memory instead...")
+        with open(model_path, "rb") as f:
+            model_data = f.read()
+        interpreter = tflite.Interpreter(model_content=model_data)
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()

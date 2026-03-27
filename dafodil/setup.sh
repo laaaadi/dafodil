@@ -39,10 +39,18 @@ echo "[2/9] Installing system packages..."
 sudo apt-get install -y --fix-missing \
     python3-dev python3-pip python3-venv python3-numpy \
     libsdl2-dev libsdl2-ttf-dev libatlas-base-dev \
-    libportaudio2 portaudio19-dev \
     libopenblas-dev \
     unzip wget \
     || echo "  Warning: some system packages failed, continuing..."
+
+# PortAudio — required for sounddevice; install separately so a batch failure doesn't skip it
+sudo apt-get install -y --fix-missing libportaudio2 portaudio19-dev \
+    || sudo apt-get install -y --fix-missing libportaudio2 \
+    || echo "  WARNING: libportaudio2 not installed — microphone will not work"
+
+# SDL2 kmsdrm — needed for Pygame fullscreen on headless Pi
+sudo apt-get install -y --fix-missing libsdl2-2.0-0 \
+    || echo "  Note: libsdl2 may already be present"
 
 # opencv via apt — guaranteed ARM64 binary, avoids 30-min source compile from pip
 # The venv uses --system-site-packages so it sees this automatically
@@ -199,9 +207,15 @@ else
     echo "  WARNING: boot config not found. Add manually: dtoverlay=googlevoicehat-soundcard"
 fi
 
+# Add user to video + render groups (needed for kmsdrm / DRM framebuffer)
+sudo usermod -aG video,render "$(whoami)" 2>/dev/null \
+    && echo "  User added to video + render groups." \
+    || echo "  Note: could not add user to video/render groups"
+
 cat > "$HOME/.asoundrc" << 'ALSA'
 pcm.!default {
     type asym
+    playback.pcm "plughw:0,0"
     capture.pcm "mic"
 }
 pcm.mic {
