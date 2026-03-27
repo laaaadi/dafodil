@@ -144,6 +144,14 @@ After reboot, SSH back in and run directly to see any errors in the terminal:
 ssh dafodil@192.168.x.x
 
 cd ~/dafodil
+/home/dafodil/venv/bin/python3 main.py
+```
+
+Or activate the venv first so you can just type `python3`:
+
+```bash
+source /home/dafodil/venv/bin/activate
+cd ~/dafodil
 python3 main.py
 ```
 
@@ -310,11 +318,20 @@ sudo raspi-config
 
 **tflite-runtime not installed (YAMNet disabled)**
 ```bash
-# Check Python version
-python3 --version
+/home/dafodil/venv/bin/pip install tflite-runtime
+```
 
-# Try installing manually
-python3 -m pip install --break-system-packages tflite-runtime
+**pip / packages not found**
+
+All Python packages live in the venv at `/home/dafodil/venv`.
+Always use the venv Python and pip:
+```bash
+/home/dafodil/venv/bin/python3 main.py
+/home/dafodil/venv/bin/pip install <package>
+
+# Or activate once per session:
+source /home/dafodil/venv/bin/activate
+python3 main.py
 ```
 
 ---

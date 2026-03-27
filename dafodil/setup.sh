@@ -3,8 +3,6 @@
 # Run with:  bash setup.sh
 
 # ── Auto-fix Windows CRLF line endings ────────────────────────────────────────
-# If this file was saved on Windows it contains \r\n; bash on Linux hates that.
-# This block detects it, strips the \r characters, then re-runs the clean file.
 if python3 -c "
 import sys
 d = open(sys.argv[1], 'rb').read()
@@ -22,63 +20,79 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODELS_DIR="$SCRIPT_DIR/models"
-PIP="python3 -m pip"
+VENV_DIR="/home/dafodil/venv"
+PIP="$VENV_DIR/bin/pip"
 
 echo "=== Dafodil RPi3 Setup ==="
 echo "Script dir : $SCRIPT_DIR"
 echo "Models dir : $MODELS_DIR"
+echo "Venv dir   : $VENV_DIR"
 echo ""
 
 # ── 1. Update package lists ───────────────────────────────────────────────────
-echo "[1/8] Updating package lists..."
+echo "[1/9] Updating package lists..."
 sudo apt-get update -q || echo "  Warning: apt-get update had errors, continuing..."
 
 # ── 2. System packages ────────────────────────────────────────────────────────
-echo "[2/8] Installing system packages..."
+echo "[2/9] Installing system packages..."
 
 sudo apt-get install -y --fix-missing \
-    python3-dev python3-pip python3-numpy \
+    python3-dev python3-pip python3-venv python3-numpy \
     libsdl2-dev libsdl2-ttf-dev libatlas-base-dev \
     libportaudio2 portaudio19-dev \
+    libopenblas-dev \
     unzip wget \
     || echo "  Warning: some system packages failed, continuing..."
 
-# Camera stack — Raspberry Pi OS only; may be missing on plain Debian
+# Camera stack — Raspberry Pi OS only; gracefully skipped on plain Debian
 sudo apt-get install -y --fix-missing python3-picamera2 2>/dev/null \
-    || echo "  Warning: python3-picamera2 not in apt (will try pip)"
+    && echo "  python3-picamera2 installed via apt." \
+    || echo "  Note: python3-picamera2 not in apt (will install in venv)"
 
 sudo apt-get install -y --fix-missing python3-kms++ 2>/dev/null \
     || sudo apt-get install -y --fix-missing python3-kmsxx 2>/dev/null \
-    || echo "  Warning: python3-kms++ not available"
+    || echo "  Note: python3-kms++ not available"
 
 sudo apt-get install -y --fix-missing libcap-dev 2>/dev/null \
-    || echo "  Warning: libcap-dev not available"
+    || echo "  Note: libcap-dev not available"
 
-# ── 3. Python packages ────────────────────────────────────────────────────────
-echo "[3/8] Installing Python packages..."
+# ── 3. Create Python virtual environment ─────────────────────────────────────
+echo "[3/9] Setting up Python virtual environment at $VENV_DIR..."
 
-# Upgrade pip
-$PIP install --break-system-packages --upgrade pip --quiet
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR" --system-site-packages
+    echo "  Venv created."
+else
+    echo "  Venv already exists."
+fi
 
-# Core packages (required — abort if these fail)
-$PIP install --break-system-packages vosk sounddevice pygame numpy \
-    || { echo "ERROR: core pip packages failed. Check your internet connection."; exit 1; }
+# Upgrade pip inside venv
+"$VENV_DIR/bin/pip" install --upgrade pip --quiet \
+    || { echo "ERROR: venv pip upgrade failed — is python3-venv installed?"; exit 1; }
 
-# opencv — use the pip headless wheel; avoids pulling ~1 GB of Qt5/VTK via apt
-echo "  Installing opencv-python-headless (pip, ~50 MB)..."
-$PIP install --break-system-packages opencv-python-headless \
+# ── 4. Python packages (installed into venv) ─────────────────────────────────
+echo "[4/9] Installing Python packages into venv..."
+
+# Core packages — required; abort if these fail
+"$VENV_DIR/bin/pip" install vosk sounddevice pygame numpy \
+    || { echo "ERROR: core pip packages failed. Check internet connection."; exit 1; }
+echo "  Core packages installed."
+
+# opencv headless — avoids pulling ~1 GB of Qt5/VTK via apt
+echo "  Installing opencv-python-headless..."
+"$VENV_DIR/bin/pip" install opencv-python-headless \
     || echo "  Warning: opencv install failed — face detection will be disabled"
 
-# picamera2 via pip if apt didn't have it
-python3 -c "import picamera2" 2>/dev/null \
-    || $PIP install --break-system-packages picamera2 \
+# picamera2 — try venv pip if apt didn't have it
+"$VENV_DIR/bin/python3" -c "import picamera2" 2>/dev/null \
+    || "$VENV_DIR/bin/pip" install picamera2 \
     || echo "  Warning: picamera2 not installed — camera will be disabled"
 
 # tflite-runtime: try PyPI, then Coral repo, then apt
 echo "  Installing tflite-runtime..."
-if $PIP install --break-system-packages tflite-runtime 2>/dev/null; then
+if "$VENV_DIR/bin/pip" install tflite-runtime 2>/dev/null; then
     echo "  tflite-runtime installed (PyPI)"
-elif $PIP install --break-system-packages \
+elif "$VENV_DIR/bin/pip" install \
         --extra-index-url https://google-coral.github.io/py-repo/ \
         tflite-runtime 2>/dev/null; then
     echo "  tflite-runtime installed (Coral repo)"
@@ -88,8 +102,8 @@ else
     echo "  WARNING: tflite-runtime not installed — YAMNet sound classification will be disabled"
 fi
 
-# ── 4. Vosk model ─────────────────────────────────────────────────────────────
-echo "[4/8] Downloading Vosk model (~40 MB)..."
+# ── 5. Vosk model ─────────────────────────────────────────────────────────────
+echo "[5/9] Downloading Vosk model (~40 MB)..."
 mkdir -p "$MODELS_DIR"
 if [ ! -d "$MODELS_DIR/vosk-model-small-en-us-0.15" ]; then
     wget --show-progress -O /tmp/vosk-model.zip \
@@ -101,8 +115,8 @@ else
     echo "  Vosk model already present, skipping."
 fi
 
-# ── 5. YAMNet TFLite model ────────────────────────────────────────────────────
-echo "[5/8] Downloading YAMNet TFLite model (~3 MB)..."
+# ── 6. YAMNet TFLite model ────────────────────────────────────────────────────
+echo "[6/9] Downloading YAMNet TFLite model (~3 MB)..."
 if [ ! -f "$MODELS_DIR/yamnet.tflite" ]; then
     wget --show-progress -O "$MODELS_DIR/yamnet.tflite" \
         https://storage.googleapis.com/tfhub-lite-models/google/lite-model/yamnet/classification/tflite/1.tflite
@@ -111,8 +125,8 @@ else
     echo "  YAMNet model already present, skipping."
 fi
 
-# ── 6. Face detection model ───────────────────────────────────────────────────
-echo "[6/8] Downloading face detection model (~5 MB)..."
+# ── 7. Face detection model ───────────────────────────────────────────────────
+echo "[7/9] Downloading face detection model (~5 MB)..."
 if [ ! -f "$MODELS_DIR/deploy.prototxt" ]; then
     wget --show-progress -O "$MODELS_DIR/deploy.prototxt" \
         https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt
@@ -128,9 +142,8 @@ else
     echo "  Caffe model already present, skipping."
 fi
 
-# ── 7. YAMNet class map ───────────────────────────────────────────────────────
-# Use Python to parse the CSV — avoids bash CRLF / quoting issues
-echo "[7/8] Building YAMNet class list..."
+# ── 8. YAMNet class map ───────────────────────────────────────────────────────
+echo "[8/9] Building YAMNet class list..."
 if [ ! -f "$MODELS_DIR/yamnet_classes.txt" ]; then
     wget -q -O /tmp/class_map.csv \
         https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv
@@ -139,7 +152,7 @@ import csv, os
 out = os.path.join(os.environ['MODELS_DIR'], 'yamnet_classes.txt')
 with open('/tmp/class_map.csv') as f_in, open(out, 'w') as f_out:
     reader = csv.reader(f_in)
-    next(reader)  # skip header row
+    next(reader)
     for row in reader:
         if len(row) >= 3:
             f_out.write(row[2].strip() + '\n')
@@ -151,10 +164,9 @@ else
     echo "  yamnet_classes.txt already present, skipping."
 fi
 
-# ── 8. I2S overlay + ALSA config ─────────────────────────────────────────────
-echo "[8/8] Configuring I2S mic and ALSA..."
+# ── 9. I2S overlay + ALSA config ─────────────────────────────────────────────
+echo "[9/9] Configuring I2S mic and ALSA..."
 
-# Find boot config (location changed in newer Raspberry Pi OS)
 BOOT_CONFIG="/boot/firmware/config.txt"
 [ -f "$BOOT_CONFIG" ] || BOOT_CONFIG="/boot/config.txt"
 
@@ -194,7 +206,9 @@ echo ""
 echo "Next: reboot to activate the I2S mic overlay:"
 echo "  sudo reboot"
 echo ""
-echo "After reboot — test manually (errors show in terminal):"
-echo "  cd $SCRIPT_DIR && python3 main.py"
+echo "After reboot — test manually:"
+echo "  cd $SCRIPT_DIR && $VENV_DIR/bin/python3 main.py"
 echo ""
-echo "Or if the systemd service is installed, it starts automatically."
+echo "Or activate the venv first:"
+echo "  source $VENV_DIR/bin/activate"
+echo "  cd $SCRIPT_DIR && python3 main.py"
