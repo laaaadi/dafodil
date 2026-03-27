@@ -27,10 +27,32 @@ def yamnet_worker(
     classes_path: str,
 ):
     """Main loop for YAMNet classification."""
-    try:
-        import tflite_runtime.interpreter as tflite
-    except ImportError:
-        from tensorflow import lite as tflite
+    # TFLite import — try all known package names in order:
+    #   ai-edge-litert  : Google's new name (supports Python 3.13+)
+    #   tflite-runtime  : legacy name (Python ≤ 3.11)
+    #   tensorflow      : full TF (last resort, huge)
+    tflite = None
+    for _mod in ("ai_edge_litert.interpreter", "tflite_runtime.interpreter"):
+        try:
+            import importlib
+            tflite = importlib.import_module(_mod)
+            break
+        except ImportError:
+            pass
+    if tflite is None:
+        try:
+            from tensorflow import lite as tflite
+        except ImportError:
+            pass
+    if tflite is None:
+        print("[YAMNet] No TFLite runtime found — sound classification disabled.")
+        # Drain the queue so the audio process doesn't block
+        while not stop_event.is_set():
+            try:
+                audio_queue.get(timeout=0.5)
+            except Exception:
+                pass
+        return
 
     # Load class names
     with open(classes_path, "r") as f:

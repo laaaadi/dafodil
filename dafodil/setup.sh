@@ -44,10 +44,17 @@ sudo apt-get install -y --fix-missing \
     unzip wget \
     || echo "  Warning: some system packages failed, continuing..."
 
+# opencv via apt — guaranteed ARM64 binary, avoids 30-min source compile from pip
+# The venv uses --system-site-packages so it sees this automatically
+sudo apt-get install -y --fix-missing python3-opencv 2>/dev/null \
+    && echo "  python3-opencv installed via apt." \
+    || echo "  Note: python3-opencv not in apt (will try pip, may be slow on ARM)"
+
 # Camera stack — Raspberry Pi OS only; gracefully skipped on plain Debian
+# The venv inherits these via --system-site-packages, no pip needed
 sudo apt-get install -y --fix-missing python3-picamera2 2>/dev/null \
     && echo "  python3-picamera2 installed via apt." \
-    || echo "  Note: python3-picamera2 not in apt (will install in venv)"
+    || echo "  Note: python3-picamera2 not in apt"
 
 sudo apt-get install -y --fix-missing python3-kms++ 2>/dev/null \
     || sudo apt-get install -y --fix-missing python3-kmsxx 2>/dev/null \
@@ -78,19 +85,29 @@ echo "[4/9] Installing Python packages into venv..."
     || { echo "ERROR: core pip packages failed. Check internet connection."; exit 1; }
 echo "  Core packages installed."
 
-# opencv headless — avoids pulling ~1 GB of Qt5/VTK via apt
-echo "  Installing opencv-python-headless..."
-"$VENV_DIR/bin/pip" install opencv-python-headless \
-    || echo "  Warning: opencv install failed — face detection will be disabled"
+# opencv — use apt version (inherited via --system-site-packages) if available,
+# only fall back to pip if apt didn't have it. Avoids a 30-min ARM64 source build.
+if "$VENV_DIR/bin/python3" -c "import cv2" 2>/dev/null; then
+    echo "  opencv already available in venv (from apt)."
+else
+    echo "  Installing opencv-python-headless via pip (may take a while on ARM)..."
+    "$VENV_DIR/bin/pip" install opencv-python-headless \
+        || echo "  Warning: opencv install failed — face detection will be disabled"
+fi
 
-# picamera2 — try venv pip if apt didn't have it
-"$VENV_DIR/bin/python3" -c "import picamera2" 2>/dev/null \
-    || "$VENV_DIR/bin/pip" install picamera2 \
-    || echo "  Warning: picamera2 not installed — camera will be disabled"
+# picamera2 — use apt version (inherited via --system-site-packages)
+if "$VENV_DIR/bin/python3" -c "import picamera2" 2>/dev/null; then
+    echo "  picamera2 already available in venv (from apt)."
+else
+    echo "  Warning: picamera2 not available — camera will be disabled"
+fi
 
-# tflite-runtime: try PyPI, then Coral repo, then apt
-echo "  Installing tflite-runtime..."
-if "$VENV_DIR/bin/pip" install tflite-runtime 2>/dev/null; then
+# tflite: try ai-edge-litert first (Google's new package, supports Python 3.13),
+# then fall back to legacy tflite-runtime, then Coral repo
+echo "  Installing TFLite runtime..."
+if "$VENV_DIR/bin/pip" install ai-edge-litert 2>/dev/null; then
+    echo "  ai-edge-litert installed (PyPI) — TFLite OK"
+elif "$VENV_DIR/bin/pip" install tflite-runtime 2>/dev/null; then
     echo "  tflite-runtime installed (PyPI)"
 elif "$VENV_DIR/bin/pip" install \
         --extra-index-url https://google-coral.github.io/py-repo/ \
@@ -99,7 +116,7 @@ elif "$VENV_DIR/bin/pip" install \
 elif sudo apt-get install -y python3-tflite-runtime 2>/dev/null; then
     echo "  tflite-runtime installed (apt)"
 else
-    echo "  WARNING: tflite-runtime not installed — YAMNet sound classification will be disabled"
+    echo "  WARNING: TFLite runtime not installed — YAMNet sound classification will be disabled"
 fi
 
 # ── 5. Vosk model ─────────────────────────────────────────────────────────────
