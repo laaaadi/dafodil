@@ -48,7 +48,7 @@ Use **Raspberry Pi Imager** to flash **Raspberry Pi OS Lite (64-bit)** to an SD 
 
 Before flashing, click the gear icon and set:
 - Hostname: `dafodil`
-- Username: `dafodil` / Password: `ilikedafodil`
+- Username: `dafodil` / Password: `dafodil`
 - Enable SSH (password authentication)
 - Wi-Fi SSID and password
 
