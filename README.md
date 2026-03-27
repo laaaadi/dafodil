@@ -1,6 +1,6 @@
-# SoundSight
+# Dafodil
 
-A Raspberry Pi 3 fullscreen app that listens through a microphone, transcribes speech, classifies non-speech sounds, detects faces, and displays everything as animated white text on a black screen.
+A Raspberry Pi 3 fullscreen app that listens through a microphone, transcribes speech in real time, classifies non-speech sounds, detects faces, and displays everything as animated white text on a black screen.
 
 Runs headless — no desktop, no X server. Uses the KMS/DRM framebuffer directly.
 
@@ -8,10 +8,10 @@ Runs headless — no desktop, no X server. Uses the KMS/DRM framebuffer directly
 
 ## How it works
 
-- **Speech → text**: Vosk (offline, real-time). Words appear immediately as you speak, sized by volume.
+- **Speech → text**: Vosk (offline). Words appear immediately as you speak, sized by how loud you are.
 - **Sound classification**: YAMNet (521 AudioSet classes). Non-speech sounds appear in grey.
 - **Face tracking**: OpenCV DNN. Speech text is placed on detected faces. If no face is visible, text appears at a random position.
-- **Camera feed toggle**: Press `C` to show/hide the live camera behind the text.
+- **Camera feed toggle**: Press `C` to show or hide the live camera behind the text.
 
 All text fades out after 1.5 seconds.
 
@@ -22,50 +22,68 @@ All text fades out after 1.5 seconds.
 | Part | Details |
 |---|---|
 | Board | Raspberry Pi 3 |
-| OS | Raspbian Lite (no desktop) |
+| OS | Raspberry Pi OS Lite 64-bit (no desktop) |
 | Display | 800×480 HDMI |
-| Camera | Raspberry Pi Camera Rev 1.3 (CSI ribbon) |
+| Camera | Raspberry Pi Camera Rev 1.3 (CSI ribbon cable) |
 | Microphone | INMP441 I2S MEMS mic |
 
 ### INMP441 wiring
 
-| INMP441 pin | RPi GPIO | RPi pin |
+| INMP441 pin | RPi GPIO | RPi physical pin |
 |---|---|---|
 | VDD | 3.3V | Pin 1 |
 | GND | GND | Pin 6 |
 | SD | GPIO 20 | Pin 38 |
 | WS | GPIO 19 | Pin 35 |
 | BCK | GPIO 18 | Pin 12 |
-| L/R | GND | Pin 6 (mono left channel) |
+| L/R | GND | Pin 6 (sets mono left channel) |
 
 ---
 
 ## Installation
 
-### 1. Flash Raspbian Lite
+### Step 1 — Flash the SD card
 
-Use **Raspberry Pi Imager** to flash **Raspberry Pi OS Lite (64-bit)** to an SD card.
+Use **Raspberry Pi Imager** → choose **Raspberry Pi OS Lite (64-bit)**.
 
-Before flashing, click the gear icon and set:
-- Hostname: `dafodil`
-- Username: `dafodil` / Password: `dafodil`
-- Enable SSH (password authentication)
-- Wi-Fi SSID and password
+Click the **gear icon (⚙)** before writing and configure:
 
-Boot the Pi and find its IP with `hostname -I` or check your router.
+| Setting | Value |
+|---|---|
+| Hostname | `dafodil` |
+| Username | `dafodil` |
+| Password | `ilikedafodil` |
+| SSH | Enable (password authentication) |
+| Wi-Fi | your SSID and password |
 
-### 2. Enable the camera
+Write the card, insert it in the Pi, power on.
 
+Find the Pi's IP address from your router, or run on the Pi:
+```bash
+hostname -I
+```
+
+---
+
+### Step 2 — Enable the camera
+
+SSH into the Pi:
 ```bash
 ssh dafodil@192.168.x.x
+```
+
+Then:
+```bash
 sudo raspi-config
 ```
 
-Go to **Interface Options → Camera → Enable**, then finish (do not reboot yet).
+Go to **Interface Options → Legacy Camera → Enable**, then **Finish** (do not reboot yet).
 
-### 3. Copy the project to the Pi
+---
 
-From your Windows machine (PowerShell or Git Bash):
+### Step 3 — Copy the project to the Pi
+
+From your **Windows machine** (PowerShell or Git Bash):
 
 ```bash
 scp -r D:\ide\impact\prototypes\dafodil_rpi3\dafodil dafodil@192.168.x.x:/home/dafodil/
@@ -73,9 +91,22 @@ scp -r D:\ide\impact\prototypes\dafodil_rpi3\dafodil dafodil@192.168.x.x:/home/d
 
 Password: `ilikedafodil`
 
-### 4. Run setup
+This copies the `dafodil` folder to `/home/dafodil/dafodil/` on the Pi.
 
-SSH into the Pi, then:
+> **If you have already copied it before**, the folder may be nested (e.g. `/home/dafodil/dafodil/dafodil/`).
+> Clean it up first:
+> ```bash
+> ssh dafodil@192.168.x.x
+> rm -rf ~/dafodil
+> exit
+> ```
+> Then re-run the scp command above.
+
+---
+
+### Step 4 — Run setup
+
+SSH in and run the setup script:
 
 ```bash
 ssh dafodil@192.168.x.x
@@ -84,18 +115,18 @@ cd ~/dafodil
 bash setup.sh
 ```
 
-This will:
+This will (takes about **5–10 minutes**):
 - Install all system and Python packages
 - Download the Vosk speech model (~40 MB)
 - Download the YAMNet TFLite model (~3 MB)
-- Download OpenCV face detection model (~5 MB)
-- Download the AudioSet class list (521 sound classes)
-- Add the I2S mic overlay to `/boot/config.txt`
+- Download the OpenCV face detection model (~5 MB)
+- Download the AudioSet class list (521 sound names)
+- Add the I2S mic overlay to `/boot/firmware/config.txt`
 - Write `~/.asoundrc` for the INMP441
 
-Takes about **5–10 minutes** depending on your internet speed.
+---
 
-### 5. Reboot
+### Step 5 — Reboot
 
 The I2S microphone overlay needs a reboot to activate:
 
@@ -103,57 +134,40 @@ The I2S microphone overlay needs a reboot to activate:
 sudo reboot
 ```
 
-### 6. Test manually (optional)
+---
 
-After reboot, SSH back in and run manually to see errors in the terminal:
+### Step 6 — Test manually
+
+After reboot, SSH back in and run directly to see any errors in the terminal:
 
 ```bash
 ssh dafodil@192.168.x.x
+
 cd ~/dafodil
 python3 main.py
 ```
 
 ---
 
-## Auto-start on boot
-
-### Install the systemd service
+### Step 7 — Install the auto-start service
 
 ```bash
-# Copy the service file
-sudo cp /home/dafodil/dafodil/soundsight.service /etc/systemd/system/
+ssh dafodil@192.168.x.x
 
-# Allow the service to be restarted without a password
+# Copy service file
+sudo cp ~/dafodil/soundsight.service /etc/systemd/system/
+
+# Allow passwordless service restart (for the sync script)
 echo "dafodil ALL=(ALL) NOPASSWD: /bin/systemctl restart soundsight, /bin/systemctl start soundsight, /bin/systemctl stop soundsight" \
-  | sudo tee /etc/sudoers.d/soundsight
+    | sudo tee /etc/sudoers.d/soundsight
 
-# Enable and start the service
+# Enable and start
 sudo systemctl daemon-reload
 sudo systemctl enable soundsight
 sudo systemctl start soundsight
 ```
 
-### Check status
-
-```bash
-sudo systemctl status soundsight
-```
-
-### Watch live logs
-
-```bash
-journalctl -u soundsight -f
-```
-
-### Start / stop manually
-
-```bash
-sudo systemctl start soundsight
-sudo systemctl stop soundsight
-sudo systemctl restart soundsight
-```
-
-The service will now start automatically every time the Pi boots.
+The service will now start automatically on every boot.
 
 ---
 
@@ -167,6 +181,44 @@ The service will now start automatically every time the Pi boots.
 
 ---
 
+## Checking logs
+
+```bash
+# Live log output
+journalctl -u soundsight -f
+
+# Last 50 lines
+journalctl -u soundsight -n 50
+
+# Service status
+sudo systemctl status soundsight
+```
+
+---
+
+## Development — pushing changes to the Pi
+
+Use `sync.bat` from the project root on Windows. It copies changed files and restarts the service in one step:
+
+```bat
+sync.bat
+```
+
+Or manually:
+
+```bash
+# From Windows — copy files
+scp -r D:\ide\impact\prototypes\dafodil_rpi3\dafodil dafodil@192.168.x.x:/home/dafodil/
+
+# Restart service
+ssh dafodil@192.168.x.x "sudo systemctl restart soundsight"
+
+# Restart and watch logs
+ssh dafodil@192.168.x.x "sudo systemctl restart soundsight && journalctl -u soundsight -f"
+```
+
+---
+
 ## File structure
 
 ```
@@ -176,10 +228,10 @@ dafodil/
   yamnet_process.py     — Process 2: YAMNet sound classification
   camera_process.py     — Process 3: picamera2 + face detection
   renderer.py           — Process 4: Pygame renderer (runs in main process)
-  setup.sh              — Setup script (run once on the Pi)
-  requirements.txt      — Python package versions
+  setup.sh              — One-time setup script (run on the Pi)
+  requirements.txt      — Python package list
   soundsight.service    — systemd service file
-  models/               — Downloaded by setup.sh (not in git)
+  models/               — Downloaded by setup.sh — NOT in git
 ```
 
 ---
@@ -190,17 +242,17 @@ Four Python processes, one per CPU core:
 
 ```
 Process 1  Audio → Vosk
-           sounddevice captures 16kHz mono from INMP441
+           sounddevice captures 16 kHz mono from INMP441
            Sends partial and final words → Renderer queue
            Sends raw audio chunks → YAMNet queue
 
 Process 2  Audio → YAMNet
-           Accumulates ~1 second of audio (15600 samples)
+           Accumulates ~1 second of audio (15 600 samples)
            Runs TFLite inference ~once per second
            Sends class name + confidence → Renderer queue
 
 Process 3  Camera → Face detection
-           picamera2 at 320×240, OpenCV DNN every ~150ms
+           picamera2 at 320×240, OpenCV DNN every ~150 ms
            Sends face bounding box (x%, y%) → Renderer queue
            Shares raw frames via shared_memory for display
 
@@ -212,73 +264,120 @@ Process 4  Renderer (main process)
 
 ---
 
-## Development — updating code on the Pi
-
-After making changes on Windows, sync with:
-
-```bash
-scp -r D:\ide\impact\prototypes\dafodil_rpi3\dafodil dafodil@192.168.x.x:/home/dafodil/
-```
-
-Then restart the service:
-
-```bash
-ssh dafodil@192.168.x.x "sudo systemctl restart soundsight"
-```
-
-Or watch logs immediately after restarting:
-
-```bash
-ssh dafodil@192.168.x.x "sudo systemctl restart soundsight && journalctl -u soundsight -f"
-```
-
----
-
 ## Troubleshooting
 
 **Service keeps restarting / model files missing**
 ```bash
 # Models are not in git — run setup.sh first
-bash ~/dafodil/setup.sh
+cd ~/dafodil
+bash setup.sh
+```
+
+**Files nested wrong (e.g. `/home/dafodil/dafodil/dafodil/`)**
+```bash
+# Remove and re-copy
+rm -rf ~/dafodil
+# Then re-run scp from Windows and setup.sh again
 ```
 
 **No audio / mic not found**
 ```bash
-# Check ALSA sees the mic (should show card 1 or similar)
+# List ALSA capture devices (look for card 1 or similar)
 arecord -l
 
-# Test mic capture (5-second recording)
+# Test 5-second recording
 arecord -D hw:1,0 -f S32_LE -r 16000 -c 1 -d 5 test.wav
 aplay test.wav
 ```
 
 **Black screen / Pygame SDL error**
 ```bash
-# Check the SDL video driver
+# Check what SDL driver is being used
 journalctl -u soundsight | grep SDL
 
-# Try fbcon fallback if kmsdrm fails
+# Try fbcon fallback manually
 sudo SDL_VIDEODRIVER=fbcon python3 ~/dafodil/main.py
 ```
 
 **Camera not found**
 ```bash
-# Check camera is detected
+# List detected cameras
 libcamera-hello --list-cameras
 
-# If nothing listed, check the ribbon cable and re-enable in raspi-config
+# If nothing shown: check the ribbon cable and re-enable in raspi-config
 sudo raspi-config
 ```
 
 **tflite-runtime not installed (YAMNet disabled)**
-
-YAMNet requires `tflite-runtime`. If setup.sh couldn't install it:
 ```bash
-# Check your Python version
+# Check Python version
 python3 --version
 
-# Try installing manually for Python 3.11 on armv7l:
-pip3 install --break-system-packages \
-  "https://github.com/google-coral/pycoral/releases/download/v2.0.0/tflite_runtime-2.5.0.post1-cp311-cp311-linux_armv7l.whl"
+# Try installing manually
+python3 -m pip install --break-system-packages tflite-runtime
 ```
-Replace `cp311` with your version (e.g. `cp310` for Python 3.10).
+
+---
+
+## Publishing to GitHub
+
+### First time — create the repo
+
+1. Go to [github.com/new](https://github.com/new)
+2. Name it `dafodil`, set it to **Public** or **Private**
+3. Do **not** add a README or .gitignore — the repo must be empty
+
+### On the Pi — push the code
+
+SSH into the Pi:
+
+```bash
+ssh dafodil@192.168.x.x
+```
+
+Configure git (one time only):
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+Init and push:
+```bash
+cd ~/dafodil
+
+git init
+git add .
+git commit -m "initial commit"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/dafodil.git
+git push -u origin main
+```
+
+GitHub will ask for your username and a **Personal Access Token** (not your password).
+To create a token: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → check `repo` → copy the token.
+
+### Updating GitHub after changes
+
+After syncing new code to the Pi and testing:
+```bash
+cd ~/dafodil
+git add .
+git commit -m "describe what you changed"
+git push
+```
+
+### Or push directly from Windows
+
+If you have git installed on Windows:
+```powershell
+cd D:\ide\impact\prototypes\dafodil_rpi3
+
+git init
+git add .
+git commit -m "initial commit"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/dafodil.git
+git push -u origin main
+```
+
+> The `models/` folder is in `.gitignore` and will not be uploaded — models are downloaded by `setup.sh`.

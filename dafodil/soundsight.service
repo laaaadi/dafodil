@@ -1,5 +1,5 @@
 [Unit]
-Description=SoundSight — audio/vision display
+Description=Dafodil — audio/vision display
 After=network.target sound.target
 
 [Service]

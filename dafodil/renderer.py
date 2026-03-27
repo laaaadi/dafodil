@@ -142,7 +142,7 @@ class Renderer:
         except Exception:
             self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.NOFRAME)
 
-        pygame.display.set_caption("SoundSight")
+        pygame.display.set_caption("Dafodil")
         pygame.mouse.set_visible(False)
 
         # Load font

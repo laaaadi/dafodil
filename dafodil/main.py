@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SoundSight — Raspberry Pi 3 native app.
+"""Dafodil — Raspberry Pi 3 native app.
 
 Listens through a microphone, transcribes speech, classifies non-speech sounds,
 detects faces, and displays everything as animated white text on a black screen.
@@ -79,20 +79,20 @@ def main():
     p_audio = mp.Process(
         target=audio_worker,
         args=(speech_queue, yamnet_audio_queue, control_event, stop_event, VOSK_MODEL),
-        name="SoundSight-Audio",
+        name="Dafodil-Audio",
         daemon=True,
     )
     p_yamnet = mp.Process(
         target=yamnet_worker,
         args=(yamnet_audio_queue, sound_queue, control_event, stop_event,
               YAMNET_MODEL, YAMNET_CLASSES),
-        name="SoundSight-YAMNet",
+        name="Dafodil-YAMNet",
         daemon=True,
     )
     p_camera = mp.Process(
         target=camera_worker,
         args=(face_queue, control_event, stop_event, FACE_PROTOTXT, FACE_CAFFEMODEL),
-        name="SoundSight-Camera",
+        name="Dafodil-Camera",
         daemon=True,
     )
 
@@ -105,7 +105,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Start worker processes
-    print("[Main] Starting SoundSight...")
+    print("[Main] Starting Dafodil...")
     p_audio.start()
     p_yamnet.start()
     p_camera.start()
