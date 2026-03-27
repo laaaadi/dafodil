@@ -1,0 +1,18 @@
+[Unit]
+Description=SoundSight — audio/vision display
+After=network.target sound.target
+
+[Service]
+User=dafodil
+WorkingDirectory=/home/dafodil/dafodil
+Environment="SDL_VIDEODRIVER=kmsdrm"
+Environment="SDL_AUDIODRIVER=alsa"
+Environment="DISPLAY="
+ExecStart=/usr/bin/python3 /home/dafodil/dafodil/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
